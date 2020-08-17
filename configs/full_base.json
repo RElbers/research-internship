@@ -1,0 +1,21 @@
+{
+    "name": "full_base",
+    "data_dir": "/home/robine/projects/data",
+    "iterations": 40000,
+    "log_frequency": 5000,
+    "lr": 0.0001,
+    "augment": true,
+    "as_8bit": false,
+    "batch_size": 3,
+    "train_on": "full",
+    "patch_size": 1024,
+    "resize_width": 1600,
+    "resize_height": 3200,
+    "attention_blocks": false,
+    "guided_attention": false,
+    "attention_loss": "bce",
+    "attention_weight": 10,
+    "apply_attention_mask": true,
+    "n_layers": 34,
+    "pool": "avg"
+}

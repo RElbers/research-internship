@@ -1,0 +1,21 @@
+{
+    "name": "1024_guided",
+    "data_dir": "../data",
+    "iterations": 20000,
+    "log_frequency": 1000,
+    "lr": 0.0001,
+    "augment": true,
+    "as_8bit": false,
+    "batch_size": 48,
+    "train_on": "patch",
+    "patch_size": 512,
+    "resize_width": 512,
+    "resize_height": 512,
+    "attention_blocks": true,
+    "guided_attention": false,
+    "attention_loss": "dice",
+    "attention_weight": 10,
+    "apply_attention_mask": true,
+    "n_layers": 18,
+    "pool": "avg"
+}
