@@ -34,6 +34,10 @@ def is_mask(file):
 
 
 def parse_csvs(df_csv, cbis_ddsm_dir):
+    """
+    Parse csv files to get a list of mammogram objects.
+    """
+
     mammograms = {}
     swaps = []
     for row in tqdm(list(df_csv.iterrows())):

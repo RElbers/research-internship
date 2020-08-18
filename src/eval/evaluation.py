@@ -16,10 +16,11 @@ from main import get_dataset, get_model
 from training.trainer import TrainInfo
 from util import vis_util
 from util.torch_util import get_device, numpy_to_tensor
-from util.vis_util import show_attention_mask, greyscale_to_heatmap
+from util.vis_util import vis_attention_map, greyscale_to_heatmap
 
 
 def to_calc_mass(t, p):
+    # Change labels to split by mass/calcification
     t[t == 0] = 0
     t[t == 1] = 0
     t[t == 2] = 0
@@ -38,6 +39,7 @@ def to_calc_mass(t, p):
 
 
 def to_malign_benign(t, p):
+    # Change labels to split by malign/benign
     t[t == 0] = 0
     t[t == 1] = 1
     t[t == 2] = 2
@@ -122,6 +124,13 @@ class Evaluator:
         return database
 
     def __init__(self, input_path, name):
+        """
+        Helper class for evaluating a model.
+
+        :param input_path: The path which was the output path for the model. Should contain the 'config.json' file.
+        :param name: The name of the experiment.
+        """
+
         self.model = None
         self.name = name
         self.input_path = input_path
@@ -135,13 +144,20 @@ class Evaluator:
         self.database = self._load_database()
         self.dataset = get_dataset(database=self.database, config=self.config)
 
-    def attention_mask(self, checkpoint, type='per_abnormality'):
-        self.model = self._load_model(checkpoint)
+    def attention_map(self, checkpoint, type='per_abnormality'):
+        """
+        Evaluate the attention map.
 
+        :param checkpoint: the checkpoint to use.
+        :param type: What type of data to use. Must be one of ['per_abnormality', 'per_mammogram']
+        """
+
+        self.model = self._load_model(checkpoint)
         if not self.model.using_guided_attention and not self.model.using_attention_blocks:
             print("Model does not use attention")
             return
 
+        # Load the data
         if type == 'per_abnormality':
             data = self.dataset.data_test
             imgs = [x[0][0] for x in data]
@@ -162,13 +178,17 @@ class Evaluator:
         else:
             raise Exception(f"{type} must be one of ['per_abnormality', 'per_mammogram']")
 
+        # Quantitative
         if type == 'per_abnormality':
             self._attention_mask_quantitative(imgs, masks, type=type)
+
+        # Qualitative
         self._attention_mask(path, imgs, masks, type=type)
 
-    def find_best_model(self, split):
-        if not split in ['train', 'test']:
-            raise Exception(f"split ({split}) must be one of ['train', 'test']")
+    def find_best_model(self):
+        """
+        :return: The checkpoint for the model with the best accuracy.
+        """
 
         best_checkpoint = None
         best_accuracy = 0.0
@@ -180,7 +200,7 @@ class Evaluator:
             metrics = TrainInfo.calculate_metrics(self.model,
                                                   self.dataset,
                                                   batch_size=self.config['batch_size'],
-                                                  split=split,
+                                                  split='test',
                                                   n=10 ** 9)
             accuracy = metrics['accuracy']
             if accuracy > best_accuracy:
@@ -190,7 +210,11 @@ class Evaluator:
         return best_checkpoint
 
     def evaluate(self, checkpoint):
-        self.model = self._load_model(checkpoint)
+        model = self._load_model(checkpoint)
+        self.evaluate_model(model)
+
+    def evaluate_model(self, model):
+        self.model = model
         iteration = 0
 
         metrics = TrainInfo.calculate_metrics(self.model,
@@ -200,7 +224,7 @@ class Evaluator:
                                               n=10 ** 9)
 
         ys_true, ys_pred, names = np.array(metrics['ys_true']), np.array(metrics['ys_pred']), self.dataset._get_class_names()
-        self._calculate_accuracies(ys_true, ys_pred, names, '7-class')
+        self._calculate_accuracies(ys_true, ys_pred, names, 'all_classes')
 
         ys_true, ys_pred, names = to_calc_mass(ys_true, ys_pred)
         self._calculate_accuracies(ys_true, ys_pred, names, 'calc_mass')
@@ -208,7 +232,7 @@ class Evaluator:
         ys_true, ys_pred, names = to_malign_benign(ys_true, ys_pred)
         self._calculate_accuracies(ys_true, ys_pred, names, 'malign_benign')
 
-        vis_util.show_roc_curve(metrics, self.dataset)
+        vis_util.plt_roc_curve(metrics, self.dataset)
         vis_util.save_plt(self.output_path, f'{self.name}_roc_curve_{iteration:09d}.png')
 
         vis_util.show_confusion_matrix(metrics, self.dataset)
@@ -216,7 +240,7 @@ class Evaluator:
 
     def _get_attention_mask(self):
         if self.model.using_attention_blocks:
-            return self.model.attention_mask_block()
+            return self.model.attention_map_block()
         elif self.model.using_guided_attention:
             return self.model.attention_mask_guided
         return None
@@ -228,9 +252,9 @@ class Evaluator:
         if attention_mask is None:
             return None
 
-        visualization = show_attention_mask(img=DataLoader.normalize(img.squeeze()),
-                                            mask=DataLoader.normalize(mask.squeeze()),
-                                            attention_mask=attention_mask)
+        visualization = vis_attention_map(img=DataLoader.normalize(img.squeeze()),
+                                          mask=DataLoader.normalize(mask.squeeze()),
+                                          attention_map=attention_mask)
         return visualization
 
     def _attention_mask_quantitative(self, imgs, masks, type):

@@ -3,9 +3,8 @@ import torch.nn as nn
 
 from models.base.attention_branch import AttentionBranch
 from models.base.classifier import Classifier
-from models.base.resnet_rapper import ResnetWrapper
+from models.base.conv_encoder import ResnetWrapper
 from models.base_model import BaseModel
-from models.util.builder import Builder
 from util.torch_util import rescale_to_smallest
 
 
@@ -30,12 +29,11 @@ class ResNet(BaseModel):
                  pretrained=True,
                  attention_loss='bce',
                  attention_weight=10,
-                 apply_attention_mask=10,
+                 apply_attention_mask=True,
                  lr=0.0001,
-                 n_layers=18,
-                 pool='avg'):
-        super().__init__(n_classes, Builder(3, 'relu', 'batch', cbam=using_attention_blocks))
-        self.apply_attention_mask = apply_attention_mask
+                 n_layers=18):
+        super().__init__(n_classes)
+        self.apply_attention_map = apply_attention_mask
         self.attention_weight = attention_weight
         self.using_guided_attention = using_guided_attention
         self.using_attention_blocks = using_attention_blocks
@@ -47,13 +45,10 @@ class ResNet(BaseModel):
 
         self.classifier = Classifier(features_0=fs,
                                      features_1=fs,
-                                     n_classes=n_classes,
-                                     builder=self.builder,
-                                     pool=pool)
+                                     n_classes=n_classes)
 
         if using_guided_attention:
-            self.attention_branch = AttentionBranch(filters=fs,
-                                                    builder=self.builder)
+            self.attention_branch = AttentionBranch(filters=fs)
 
             if attention_loss == 'dice':
                 self.mask_loss = dice_loss
@@ -69,16 +64,18 @@ class ResNet(BaseModel):
         encoding = self.encoder(img)
 
         if self.using_guided_attention:
-            mask = self.attention_branch(encoding)
-            self.attention_mask_guided = mask
-            # if self.apply_attention_mask:
-            encoding = mask * encoding
+            map = self.attention_branch(encoding)
+            self.attention_map_guided = map
+            if self.apply_attention_map:
+                encoding = map * encoding
 
         y_pred = self.classifier(encoding)
         return y_pred
 
-    def calculate_loss(self, img, mask, y):
-        loss, y_pred = super().calculate_loss(img, mask, y)
+    def calculate_loss(self, img, mask, ys):
+        y_pred = self.forward(img)
+        classification_loss = self.loss(y_pred, ys)
+        loss = classification_loss
 
         if self.using_guided_attention:
             mask_loss = self.attention_loss(mask)
@@ -87,15 +84,15 @@ class ResNet(BaseModel):
         return loss, y_pred
 
     def attention_loss(self, mask):
-        size = (self.attention_mask_guided.shape[-2], self.attention_mask_guided.shape[-1])
+        size = (self.attention_map_guided.shape[-2], self.attention_map_guided.shape[-1])
         downsample = torch.nn.Upsample(size=size, mode='nearest')
 
         mask_downsampled = downsample(mask)
-        mask_loss = self.mask_loss(self.attention_mask_guided, mask_downsampled)
+        mask_loss = self.mask_loss(self.attention_map_guided, mask_downsampled)
 
         return mask_loss * self.attention_weight
 
-    def attention_mask_block(self):
+    def attention_map_block(self):
         masks = []
         for ms in self.encoder.attention_mask():
             for m in ms:

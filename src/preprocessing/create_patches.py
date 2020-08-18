@@ -30,10 +30,15 @@ def find_border(mask):
 
 
 def create_patches(mammogram, database, size):
+    """
+    Create patches for this mammogram
+    """
+
     try:
         bad_masks = []
         img = database.paths.full_clean(mammogram).load()
 
+        # Crop mammogram to abnormality
         mask_combined = np.zeros_like(img)
         for abnormality in mammogram.abnormalities:
             mask = database.paths.mask_clean(abnormality).load()
@@ -49,25 +54,27 @@ def create_patches(mammogram, database, size):
                 bad_masks.append(abnormality.id)
                 continue
 
+            # Find the borders of the abnormality, with a margin such that the transition between abnormality and background is visible.
             borders = find_borders(mask, margin=size // 4)
             # borders = find_borders(mask, margin=8)
             borders = expand_to_size(mask, borders, size)
             borders = fix_negative_borders(borders)
 
+            # Crop mammogram to abnormality.
             img_crop = crop(img, borders)
             if img_crop.shape[0] < size or img_crop.shape[1] < size:
                 continue
+
+            # Save cropped image
             database.paths.crop_clean(abnormality).save(img_crop)
 
+            # Save cropped mask
             mask_crop = crop(mask, borders)
             database.paths.crop_mask(abnormality).save(mask_crop)
 
-            # show_img(img)
-            # show_img(mask)
-            # show_img(img_crop)
-            # show_img(mask_crop)
             mask_combined += mask
 
+        # Patches without abnormalities
         negative_mask = np.invert(mask_combined)
         negative_patches = _extract_patches(img, negative_mask, 4, size)
 

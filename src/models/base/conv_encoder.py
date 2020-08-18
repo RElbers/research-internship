@@ -4,10 +4,14 @@ from torch.nn import Sequential
 from torchvision.models.resnet import BasicBlock, resnet18, resnet34
 
 from models.util.attention import CBAMBlock
-from util.torch_util import get_device, rescale_to_smallest
+from util.torch_util import get_device
 
 
 class BasicBlockWrapper(nn.Module):
+    """
+    Wraps a residual block and adds attention modules after the skip connection.
+    """
+
     def __init__(self, block, using_cbam):
         super().__init__()
         self.block = block
@@ -40,14 +44,14 @@ class BasicBlockWrapper(nn.Module):
         if not self.using_cbam:
             return None
 
-        # spatial_attention =self.cbam.spatial_attention.scale
-        # channel_attention =self.cbam.channel_attention.scale
-        # attention =  spatial_attention * channel_attention
-
         return self.cbam.spatial_attention.scale
 
 
 class LayerWrapper(nn.Module):
+    """
+    Wraps a resnet layer and adds attention modules if needed.
+    """
+
     def wrap(self, module):
         if isinstance(module, BasicBlock):
             return BasicBlockWrapper(module, self.using_cbam)
@@ -81,7 +85,17 @@ class LayerWrapper(nn.Module):
 
 
 class ResnetWrapper(nn.Module):
+    """
+    Wrapper for the pytorch resnet class.
+    """
+
     def __init__(self, using_cbam, pretrained, n_layers):
+        """
+        :param using_cbam: Use attention blocks.
+        :param pretrained: Load weights pretrained on ImageNet
+        :param n_layers: The number of layers for the resnet.
+        """
+
         super().__init__()
         if n_layers == 18:
             self.resnet = resnet18(pretrained=pretrained)
@@ -125,6 +139,9 @@ class ResnetWrapper(nn.Module):
         return y
 
     def attention_mask(self):
+        """
+        :return: the attention masks for each layer
+        """
         if not self.using_cbam:
             return []
 
@@ -137,15 +154,3 @@ class ResnetWrapper(nn.Module):
         ]
 
         return masks
-
-    def combined_output(self):
-        ys = [
-            self.layer0.output,
-            self.layer1.output,
-            self.layer2.output,
-            self.layer3.output,
-            self.layer4.output,
-        ]
-
-        ys = rescale_to_smallest(ys)
-        return ys

@@ -7,6 +7,10 @@ from util.func import parallel_map
 
 
 def crop(img, borders):
+    """
+    Crops the image according to the number of pixels in the border dictionary.
+    """
+
     w, h = img.shape[1], img.shape[0]
     cropped_img = img[borders['top']:h - borders['bottom'], borders['left']:w - borders['right']]
 
@@ -14,6 +18,10 @@ def crop(img, borders):
 
 
 def combine_borders(borders_a: dict, borders_b: dict):
+    """
+    Combine 2 border dictionaries by adding the amounts.
+    """
+
     borders = {}
     for side in borders_a.keys():
         borders[side] = borders_a[side] + borders_b[side]
@@ -22,6 +30,14 @@ def combine_borders(borders_a: dict, borders_b: dict):
 
 
 def clean_mammogram(mammogram, database, background_threshold=1000):
+    """
+    Cleans a single mammogram.
+    :param mammogram: The mammogram to clean.
+    :param database: The database.
+    :param background_threshold: Pixels under this value count as background.
+    :return: The borders used for cropping.
+    """
+
     img = database.paths.full(mammogram).load()
 
     if img.dtype == np.uint8:
@@ -89,6 +105,14 @@ def clean_mammogram(mammogram, database, background_threshold=1000):
 
 
 def find_borders(mask, background_ratio_threshold=0.1):
+    """
+    Find the borders of a mask.
+
+    :param mask: The mask.
+    :param background_ratio_threshold: Keep searching until this ratio of pixels are background.
+    :return: A dictionary of borders for each side.
+    """
+
     w, h = mask.shape[1], mask.shape[0]
 
     border_left = find_border(mask.T, background_ratio_threshold)

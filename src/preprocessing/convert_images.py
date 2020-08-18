@@ -5,6 +5,10 @@ from util.func import parallel_map
 
 
 def mammogram_to_png(mammogram, database, cbis_ddsm_dir):
+    """
+    Convert the dicom image to png.
+    """
+
     img = read_file(str(cbis_ddsm_dir.joinpath(mammogram.path_img))).pixel_array
     database.paths.full(mammogram).save(img)
 

@@ -10,58 +10,6 @@ from util.func import Lazy
 from util.torch_util import get_device
 
 
-def dice(im1, im2, empty_score=1.0):
-    im1 = np.asarray(im1).astype(np.bool)
-    im2 = np.asarray(im2).astype(np.bool)
-
-    if im1.shape != im2.shape:
-        raise ValueError("Shape mismatch: im1 and im2 must have the same shape.")
-
-    im_sum = im1.sum() + im2.sum()
-    if im_sum == 0:
-        return empty_score
-
-    # Compute Dice coefficient
-    intersection = np.logical_and(im1, im2)
-
-    return 2. * intersection.sum() / im_sum
-
-
-def validate_mask(model, batches, split, n=1000):
-    if not model.using_guided_attention:
-        return 0
-
-    losses = []
-    for iteration, (X, y_true) in enumerate(batches):
-        if split == 'train':
-            if iteration * len(y_true) > n:
-                break
-
-        mask = X[:, 0:1, :, :]
-        model(X)
-
-        loss = model.attention_loss(mask)
-        losses.append(loss.item())
-
-    return mean(losses)
-
-
-def validate(model, batches, split, n):
-    ys_true = []
-    ys_pred = []
-
-    for iteration, (X, y_true) in enumerate(batches):
-        if split == 'train':
-            if iteration * len(y_true) > n:
-                break
-        y_pred = model(X)
-
-        ys_true.extend(y_true.detach().cpu().numpy())
-        ys_pred.extend(y_pred.detach().cpu().numpy())
-
-    return ys_true, ys_pred
-
-
 class TrainInfo:
     def __init__(self, model, dataset, batch_size, iteration, total_iterations, loss, accuracy):
         self.model = model
@@ -78,14 +26,14 @@ class TrainInfo:
     @staticmethod
     def calculate_metrics(model, dataset, batch_size, split, n=1000):
         data = dataset.batches(split, batch_size, augment=False)
-        ys_true, ys_pred_logits = validate(model, data, split=split, n=n)
+        ys_true, ys_pred_logits = TrainInfo.validate(model, data, split=split, n=n)
         ys_pred = np.argmax(ys_pred_logits, axis=1)
         accuracy = accuracy_score(ys_true, ys_pred)
         ys_pred_proba = softmax(ys_pred_logits)
         loss = log_loss(ys_true, ys_pred_proba, labels=list(range(len(dataset.classes))))
 
-        # data = dataset.batches(split, batch_size, augment=False)
-        # attention_loss = 0  # validate_mask(model, data, split=split)
+        # attention_loss = TrainInfo.calculate_attention_loss(model, data, split=split)
+        attention_loss = 0
 
         metrics = {
             'ys_true': ys_true,
@@ -93,13 +41,52 @@ class TrainInfo:
             'ys_pred_logits': ys_pred_logits,
             'accuracy': accuracy,
             'loss': loss,
-            'attention_loss': 0,
+            'attention_loss': attention_loss,
         }
 
         return metrics
 
+    @staticmethod
+    def calculate_attention_loss(model, batches, split, n=1000):
+        if not model.using_guided_attention:
+            return 0
+
+        losses = []
+        for iteration, (X, y_true) in enumerate(batches):
+            if split == 'train':
+                if iteration * len(y_true) > n:
+                    break
+
+            mask = X[:, 0:1, :, :]
+            model(X)
+
+            loss = model.attention_loss(mask)
+            losses.append(loss.item())
+
+        return mean(losses)
+
+    @staticmethod
+    def validate(model, batches, split, n):
+        ys_true = []
+        ys_pred = []
+
+        for iteration, (X, y_true) in enumerate(batches):
+            if split == 'train':
+                if iteration * len(y_true) > n:
+                    break
+            y_pred = model(X)
+
+            ys_true.extend(y_true.detach().cpu().numpy())
+            ys_pred.extend(y_pred.detach().cpu().numpy())
+
+        return ys_true, ys_pred
+
 
 class Trainer:
+    """
+    Class which trains a model on a dataset.
+    """
+
     def __init__(self, model):
         self.model = model.to(get_device())
         self.on_iteration_end = []
@@ -107,6 +94,13 @@ class Trainer:
         self.running_accuracy = deque(maxlen=1000)
 
     def train(self, dataset, n_iterations, batch_size):
+        """
+        Starts training the model on the given dataset.
+        :param dataset: The dataset to train on.
+        :param n_iterations: The number of iterations (minibatches) to train for.
+        :param batch_size: The size of the minibatch.
+        """
+
         print("Training...")
 
         stream = dataset.stream('train', batch_size)
@@ -123,6 +117,10 @@ class Trainer:
                 break
 
     def _interation_end(self, info):
+        """
+        Prints info for the current iteration and invokes each callback.
+        """
+
         with torch.no_grad():
             # self.model.eval()
 

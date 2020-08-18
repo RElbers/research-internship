@@ -27,7 +27,10 @@ class ChannelAttentionModule(nn.Module):
 class SpatialAttentionModule(nn.Module):
     def __init__(self, kernel_size=7):
         super(SpatialAttentionModule, self).__init__()
-        self.conv = nn.Conv2d(in_channels=2, out_channels=1, kernel_size=kernel_size, padding=(kernel_size - 1) // 2)
+        self.conv = nn.Conv2d(in_channels=2,
+                              out_channels=1,
+                              kernel_size=kernel_size,
+                              padding=(kernel_size - 1) // 2)
         self.norm = nn.BatchNorm2d(2)
 
         self.scale = None

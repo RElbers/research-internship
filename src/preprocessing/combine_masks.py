@@ -4,6 +4,10 @@ from util.func import parallel_map
 
 
 def combine_masks(mammogram, database):
+    """
+    Combine the mask for each abnormality into one big mask for the entire mammogram
+    """
+
     if not database.paths.full_clean(mammogram).path.exists():
         return []
 

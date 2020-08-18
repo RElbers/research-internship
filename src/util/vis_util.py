@@ -1,10 +1,7 @@
-import io
-
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-from PIL import Image
 from scipy.special import softmax
 from sklearn.metrics import confusion_matrix, roc_curve, auc
 from sklearn.preprocessing import label_binarize
@@ -15,6 +12,10 @@ sns.set()
 
 
 def save_plt(path, filename):
+    """
+    Save plt figure to disk.
+    """
+
     path.mkdir(exist_ok=True, parents=True)
     plt.savefig(path.joinpath(filename))
 
@@ -42,22 +43,17 @@ def show_img(img, title='', save_to=None):
     plt.show()
 
 
-def plt_to_array():
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    buf.seek(0)
-
-    img = Image.open(buf)
-    return img
-
-
 def greyscale_to_heatmap(image, cmap='viridis'):
     colormap = plt.get_cmap(cmap)
     out = colormap(image)
     return out[:, :, :3]
 
 
-def show_roc_curve(metrics, dataset):
+def plt_roc_curve(metrics, dataset):
+    """
+    Create a plot of the ROC curve based on the metrics.
+    """
+
     n_classes = len(dataset.classes)
     ys_true = label_binarize(metrics['ys_true'], classes=list(range(n_classes)))
     ys_pred = softmax(metrics['ys_pred_logits'])
@@ -84,6 +80,10 @@ def show_roc_curve(metrics, dataset):
 
 
 def show_confusion_matrix(metrics, dataset):
+    """
+    Create a plot of the confusion matrix based on the metrics.
+    """
+
     labels = list(map(lambda l: dataset.class_to_idx[l], dataset.classes))
     cm = confusion_matrix(metrics['ys_true'], metrics['ys_pred'], labels)
 
@@ -104,37 +104,45 @@ def show_confusion_matrix(metrics, dataset):
     return cm
 
 
-def show_attention_masks(dataset, model, split, mask_type):
-    masks = []
-    xs, _ = next(dataset.stream(split, 4))
+def vis_attention_maps(dataset, model, split, mask_type):
+    """
+    Creates a visualization of attention maps for 3 samples.
+    """
+
+    maps = []
+    xs, _ = next(dataset.stream(split, 3))
     for i in range(4):
         img = xs[i:i + 1, 0:1, :, :]
         mask = xs[i:i + 1, 1:2, :, :]
 
         model(img)
         if mask_type == 'block':
-            attention_mask = model.attention_mask_block()
+            attention_map = model.attention_map_block()
         elif mask_type == 'guided':
-            attention_mask = model.attention_mask_guided
+            attention_map = model.attention_map_guided
         else:
             raise ValueError("mask_type")
 
-        mask_heatmap = show_attention_mask(img=img, mask=mask, attention_mask=attention_mask)
-        masks.append(mask_heatmap)
+        map_heatmap = vis_attention_map(img=img, mask=mask, attention_map=attention_map)
+        maps.append(map_heatmap)
 
-    mask_concat = np.concatenate(masks, axis=0)
-    mask_heatmap = greyscale_to_heatmap(mask_concat)
-    return mask_heatmap
+    map_concat = np.concatenate(maps, axis=0)
+    map_heatmap = greyscale_to_heatmap(map_concat)
+    return map_heatmap
 
 
-def show_attention_mask(img, mask, attention_mask):
+def vis_attention_map(img, mask, attention_map):
+    """
+    Creates a visualization an attention map for an image and target mask.
+    """
+
     img = tensor_to_numpy(img).squeeze()
     mask = tensor_to_numpy(mask).squeeze()
-    attention_mask = tensor_to_numpy(attention_mask).squeeze()
+    attention_map = tensor_to_numpy(attention_map).squeeze()
 
-    mask_pred = cv2.resize(np.array(attention_mask), (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
+    map_pred = cv2.resize(np.array(attention_map), (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
 
-    mask_concat = np.concatenate([img, mask, mask_pred], axis=1)
-    mask_concat = (mask_concat * 255).astype(np.uint8)
+    vis = np.concatenate([img, mask, map_pred], axis=1)
+    vis = (vis * 255).astype(np.uint8)
 
-    return mask_concat[:, :]
+    return vis[:, :]

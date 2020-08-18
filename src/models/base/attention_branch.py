@@ -1,10 +1,12 @@
 import torch.nn as nn
 
+from models.util.builder import Builder
+
 
 class AttentionBranch(nn.Module):
-    def __init__(self, filters, builder):
+    def __init__(self, filters):
         super().__init__()
-        self.builder = builder
+        builder = Builder(3, 'relu', 'batch', cbam=False)
 
         self.conv1 = builder.res(filters, filters)
         self.conv2 = builder.res(filters, filters)

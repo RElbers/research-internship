@@ -2,6 +2,10 @@ from itertools import chain, repeat, accumulate, tee
 
 
 def chunk(xs, n):
+    """
+    Split list into n chunks.
+    """
+
     assert n > 0
     length = len(xs)
     s, r = divmod(length, n)
@@ -13,6 +17,10 @@ def chunk(xs, n):
 
 
 def split_into_batches(things, batch_size):
+    """
+    Split list into minibatches.
+    """
+
     for i in range(0, len(things), batch_size):
         batch = things[i:min(i + batch_size, len(things))]
         if len(batch) == batch_size:

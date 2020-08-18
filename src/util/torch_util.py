@@ -3,12 +3,15 @@ import torch
 
 
 def get_device():
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cuda")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     return device
 
 
 def tensor_to_numpy(x):
+    """
+    Convert a tensor to a numpy array.
+    """
+
     if isinstance(x, np.ndarray):
         return x
 
@@ -17,6 +20,10 @@ def tensor_to_numpy(x):
 
 
 def numpy_to_tensor(x, as_type=None, to_gpu=True):
+    """
+    Convert a numpy array to a tensor.
+    """
+
     y = torch.from_numpy(x)
     if as_type is not None:
         y = y.type(as_type)
@@ -26,6 +33,10 @@ def numpy_to_tensor(x, as_type=None, to_gpu=True):
 
 
 def rescale_to_smallest(tensors):
+    """
+    Resize a list of tensors to the size of the smallest one.
+    """
+
     min_size = (10_000_000,
                 10_000_000)
     for t in tensors:
