@@ -1,0 +1,32 @@
+#!/bin/bash
+#SBATCH -J full_base
+#SBATCH -t 4-00:00:00
+#SBATCH -N 1 -c 4
+#SBATCH -p gpu
+
+module load pre2019
+module load python
+module load cuda/9.0.176 
+module load cudnn/8.0-v7
+
+cd $HOME/projects/research-internship/src
+python3 -m venv $HOME/env1
+source $HOME/env1/bin/activate
+
+pip3 install imgaug
+pip3 install $HOME/dep/torch-1.1.0-cp36-cp36m-linux_x86_64.whl
+pip3 install $HOME/dep/torchvision-0.3.0-cp36-cp36m-manylinux1_x86_64.whl
+pip3 install scikit-learn
+pip3 install numpy
+pip3 install pillow
+pip3 install scipy
+pip3 install imageio
+pip3 install opencv-python
+pip3 install pandas
+pip3 install tqdm
+pip3 install matplotlib
+pip3 install seaborn
+pip3 install pydicom
+python3 main.py ../tests/full_base.json
+
+deactivate
