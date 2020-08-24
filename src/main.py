@@ -12,13 +12,20 @@ from data.dataset.full_image_dataset import FullImageDataset
 from data.dataset.patches_dataset import PatchesDataset
 from data.dataset.synthetic_dataset import SyntheticDataset
 from data.domain import Database
+from data.loaders import ImageLoader
 from models.resnet import ResNet
-from training.callbacks import checkpoint, log
-from training.schedules import LearningRateScheduleWrapper
+from training.callbacks import checkpoint, log, LearningRateScheduleWrapper
 from training.trainer import Trainer
 
 
 def get_augmentation(augment=True, full=False):
+    """
+    Returns the imgaug augmentation pipeline.
+
+    :param augment: Returns None iff True
+    :param full: Don't full mammograms by 90 degrees, as that changes the aspect ratio
+    """
+
     if not augment:
         return None
 
@@ -39,33 +46,39 @@ def get_augmentation(augment=True, full=False):
 
 
 def get_dataset(database, config):
+    """
+     Returns an instance of BaseDataset based on config['train_on'].
+    """
+
     train_on = config['train_on']
-    resize_width = config['resize_width']
-    resize_height = config['resize_height']
-    augmentation = get_augmentation(config['augment'], full=config['train_on'] == 'full')
+    width = config['resize_width']
+    height = config['resize_height']
+    augmentation = get_augmentation(config['augment'],
+                                    full=config['train_on'] == 'full')
 
     if train_on == 'full':
+        image_loader = ImageLoader(augmentation, resize_method='scale', resize_to=(width, height))
         dataset = FullImageDataset(database=database,
-                                   width=resize_width, height=resize_height,
-                                   augmentation=augmentation,
-                                   resize_method='scale')
+                                   image_loader=image_loader)
     elif train_on == 'patch':
+        image_loader = ImageLoader(augmentation, resize_method='crop', resize_to=(width, height))
         dataset = PatchesDataset(database=database,
-                                 width=resize_width, height=resize_height,
-                                 augmentation=augmentation,
-                                 resize_method='crop')
+                                 image_loader=image_loader)
     elif train_on == 'synthetic':
+        image_loader = ImageLoader(augmentation, resize_method='scale', resize_to=(width, height))
         return SyntheticDataset(database=database,
-                                width=resize_width, height=resize_height,
-                                augmentation=augmentation,
-                                resize_method='scale')
+                                image_loader=image_loader)
     else:
-        raise ValueError("train_on")
+        raise ValueError("train_on must be one of ['full', 'patch', 'synthetic']")
 
     return dataset
 
 
 def get_model(n_classes, config):
+    """
+     Returns an instance of BaseModel based on the config dictionary.
+    """
+
     attention_blocks = config['attention_blocks']
     guided_attention = config['guided_attention']
     attention_loss = config['attention_loss']
@@ -73,10 +86,6 @@ def get_model(n_classes, config):
     apply_attention_mask = config['apply_attention_mask']
     lr = config['lr']
     n_layers = config['n_layers']
-    if 'pool' in config:
-        pool = config['pool']
-    else:
-        pool = 'avg'
 
     return ResNet(n_classes,
                   using_attention_blocks=attention_blocks,
@@ -85,8 +94,7 @@ def get_model(n_classes, config):
                   attention_weight=attention_weight,
                   apply_attention_mask=apply_attention_mask,
                   lr=lr,
-                  n_layers=n_layers,
-                  pool=pool)
+                  n_layers=n_layers)
 
 
 def get_trainer(model, dataset, name, frequency):
@@ -134,7 +142,6 @@ class Main:
                             data_dir=Path(config['data_dir']),
                             as_8bit=config['as_8bit'],
                             patch_size=config['patch_size'])
-
         dataset = get_dataset(database=database, config=config)
 
         model = get_model(n_classes=len(dataset.classes), config=config)
@@ -149,6 +156,7 @@ class Main:
         self.dataset = dataset
         self.model = model
         self.trainer = trainer
+        self.name = name
 
     def train(self):
         self.trainer.train(self.dataset,
@@ -158,9 +166,9 @@ class Main:
     @staticmethod
     def default_config():
         return {
-            'name': r'test',
+            'name': r'default',
             'data_dir': r'C:\breast_cancer\data',
-            'iterations': 40_000,
+            'iterations': 2,
             'log_frequency': 2500,
             'lr': 0.0001,
 
@@ -169,18 +177,17 @@ class Main:
             'batch_size': 16,
             'train_on': 'patch',
 
-            'patch_size': 256,
-            'resize_width': 256,
-            'resize_height': 256,
+            'patch_size': 512,
+            'resize_width': 512,
+            'resize_height': 512,
 
             'attention_blocks': False,
             'guided_attention': False,
-            'attention_loss': 'bce',
+            'attention_loss': 'dice',
             'attention_weight': 10,
 
             'apply_attention_mask': True,
             'n_layers': 18,
-            'pool': 'avg',
         }
 
 
@@ -196,3 +203,8 @@ if __name__ == '__main__':
 
     main = Main(config)
     main.train()
+
+    from eval.evaluation import Evaluator
+
+    eval = Evaluator(Path(f"../output/{main.name}"), name=config['name'])
+    eval.evaluate_model(main.model)
